@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Snake</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        
+        body {
+            background-color: #050505;
+            color: #00ffcc;
+            font-family: 'Press Start 2P', cursive;
+            touch-action: none; /* Prevent scroll on mobile gaming */
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        #game-container {
+            position: relative;
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.2), 
+                        inset 0 0 20px rgba(0, 255, 204, 0.1);
+            border: 2px solid #00ffcc;
+            border-radius: 8px;
+            background-color: #111;
+        }
+
+        canvas {
+            display: block;
+            border-radius: 6px;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Mobile D-Pad styles */
+        .d-pad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+            width: 200px;
+        }
+        
+        .d-btn {
+            background: rgba(0, 255, 204, 0.1);
+            border: 2px solid #00ffcc;
+            color: #00ffcc;
+            border-radius: 8px;
+            padding: 15px 0;
+            font-size: 1.2rem;
+            text-align: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        .d-btn:active { background: rgba(0, 255, 204, 0.4); }
+        .btn-up { grid-column: 2; }
+        .btn-left { grid-column: 1; grid-row: 2; }
+        .btn-right { grid-column: 3; grid-row: 2; }
+        .btn-down { grid-column: 2; grid-row: 2; }
+
+        #instructions-panel {
+            background: rgba(17, 17, 17, 0.9);
+            border: 1px solid #ff0055;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            max-width: 400px;
+            font-size: 0.6rem;
+            line-height: 1.5;
+            color: #ccc;
+            text-shadow: 1px 1px 2px black;
+            box-shadow: 0 0 10px rgba(255, 0, 85, 0.2);
+        }
+
+        #instructions-panel h3 {
+            color: #ff0055;
+            font-size: 0.8rem;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        #instructions-panel ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        #instructions-panel li {
+            margin-bottom: 5px;
+        }
+
+        .key-highlight {
+            color: #00ffcc;
+            font-weight: bold;
+        }
+
+        @media (min-width: 768px) {
+            .d-pad { display: none; } /* Hide on desktop */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="mb-4 text-center w-full max-w-md flex justify-between px-4 text-xs md:text-sm">
+        <div>SCORE: <span id="score">0</span></div>
+        <div class="text-white">TIME: <span id="game-time">00:00</span></div>
+        <div class="text-pink-500">HI-SCORE: <span id="high-score">0</span></div>
+    </div>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+        
+        <!-- Start/Game Over Screen -->
+        <div id="menu-overlay" class="overlay">
+            <h1 id="menu-title" class="text-2xl mb-4 text-pink-500 text-shadow">NEON SNAKE</h1>
+            <div id="menu-stats" class="text-xs mb-6 leading-relaxed flex flex-col gap-2 hidden">
+                <p>最終分數: <span id="final-score" class="text-white font-bold">0</span></p>
+                <p>存活時間: <span id="final-time" class="text-white font-bold">00:00</span></p>
+            </div>
+            <p id="menu-subtitle" class="text-xs mb-8 leading-relaxed">按下空白鍵或點擊開始</p>
+            <button id="start-btn" class="px-6 py-3 bg-transparent border-2 border-pink-500 text-pink-500 hover:bg-pink-500 hover:text-black transition-colors font-bold rounded">
+                開始遊戲
+            </button>
+        </div>
+    </div>
+
+    <!-- Mobile Controls -->
+    <div class="d-pad">
+        <div class="d-btn btn-up" id="btn-up">▲</div>
+        <div class="d-btn btn-left" id="btn-left">◀</div>
+        <div class="d-btn btn-down" id="btn-down">▼</div>
+        <div class="d-btn btn-right" id="btn-right">▶</div>
+    </div>
+
+    <!-- Instructions Panel -->
+    <div id="instructions-panel">
+        <h3>遊戲操作說明</h3>
+        <ul>
+            <li><span class="key-highlight">電腦版:</span> 使用 <span class="key-highlight">W, A, S, D</span> 或 <span class="key-highlight">方向鍵</span> 來移動。</li>
+            <li><span class="key-highlight">手機版:</span> 使用畫面下方的 <span class="key-highlight">方向按鈕</span> 來控制。</li>
+            <li>吃掉 <span style="color:#ff0055;">霓虹粉色食物</span> 讓蛇變長並增加分數。</li>
+            <li>請勿撞到 <span class="key-highlight">牆壁</span> 或是 <span class="key-highlight">自己的身體</span>。</li>
+            <li>每次吃到食物，蛇的移動速度都會稍微變快！</li>
+        </ul>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const timeElement = document.getElementById('game-time');
+        const highScoreElement = document.getElementById('high-score');
+        const menuOverlay = document.getElementById('menu-overlay');
+        const menuTitle = document.getElementById('menu-title');
+        const menuSubtitle = document.getElementById('menu-subtitle');
+        const menuStats = document.getElementById('menu-stats');
+        const finalScoreElement = document.getElementById('final-score');
+        const finalTimeElement = document.getElementById('final-time');
+        const startBtn = document.getElementById('start-btn');
+        const instructionsPanel = document.getElementById('instructions-panel');
+
+        // Game Configuration
+        const gridSize = 20;
+        const tileCount = canvas.width / gridSize;
+        let animationFrameId;
+        let isPlaying = false;
+        
+        // Time tracking
+        let gameStartTime = 0;
+        let totalPausedTime = 0; // 用於扣除瀏覽器在背景時暫停的時間
+        let lastFrameTime = 0;
+        let currentSurvivalTime = 0;
+        
+        // --- 解決方案 1: The Time-Delta Trap (使用 requestAnimationFrame 與時間差) ---
+        let lastLogicUpdateTime = 0;
+        let speed = 8; // SNAKE SPEED (Tiles per second) - 獨立於螢幕更新率
+        
+        // --- 解決方案 2: Client-Side Trust (防竄改機制雛形) ---
+        // 真正的防作弊必須在 Server 端重播(Replay)玩家操作。
+        // 在純前端，我們能做的是在記憶體中維護一個加密/雜湊的狀態，防止直接修改 DOM 或 localStorage。
+        // 這裡展示一個簡單的記憶體內部驗證機制 (Checksum/Shadow State)。
+        let _secureScore = 0; 
+        let _secureActionLog = []; // 紀錄所有操作，未來可傳給 Server 驗證合法性
+
+        function updateScore(points) {
+            _secureScore += points;
+            scoreElement.innerText = _secureScore;
+        }
+
+        function getSecureScore() {
+            // 如果 DOM 分數跟內部記憶體分數對不上，代表 DOM 被竄改了。
+            if (parseInt(scoreElement.innerText) !== _secureScore) {
+                console.warn("Anti-Cheat: Score mismatch detected!");
+                return 0; // 懲罰作弊者
+            }
+            return _secureScore;
+        }
+
+        // --- 解決方案 3: Data Structure Limitation (Linked List 取代 Array) ---
+        // 當蛇變得很長，Array.unshift 會造成 O(N) 效能問題。
+        // 使用 Double Linked List，從頭部插入與尾部刪除都是 O(1)。
+        class Node {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.next = null;
+                this.prev = null;
+            }
+        }
+
+        class SnakeList {
+            constructor() {
+                this.head = null;
+                this.tail = null;
+                this.length = 0;
+            }
+            
+            // O(1) 在頭部新增節點
+            addHead(x, y) {
+                const newNode = new Node(x, y);
+                if (!this.head) {
+                    this.head = newNode;
+                    this.tail = newNode;
+                } else {
+                    newNode.next = this.head;
+                    this.head.prev = newNode;
+                    this.head = newNode;
+                }
+                this.length++;
+            }
+            
+            // O(1) 移除尾部節點
+            removeTail() {
+                if (!this.tail) return;
+                if (this.tail === this.head) {
+                    this.head = null;
+                    this.tail = null;
+                } else {
+                    this.tail = this.tail.prev;
+                    this.tail.next = null;
+                }
+                this.length--;
+            }
+
+            // 用於渲染的遍歷
+            forEach(callback) {
+                let current = this.head;
+                let index = 0;
+                while (current) {
+                    callback(current, index);
+                    current = current.next;
+                    index++;
+                }
+            }
+
+            // 用於碰撞偵測
+            checkSelfCollision(headX, headY) {
+                let current = this.head.next; // 略過頭部自己
+                while (current) {
+                    if (current.x === headX && current.y === headY) return true;
+                    current = current.next;
+                }
+                return false;
+            }
+            
+            // 確保食物沒有生成在蛇身上
+            isOnSnake(x, y) {
+                let current = this.head;
+                while (current) {
+                    if (current.x === x && current.y === y) return true;
+                    current = current.next;
+                }
+                return false;
+            }
+        }
+
+        let snake;
+        let food = { x: 0, y: 0 };
+        let dx = 0; 
+        let dy = 0; 
+        let nextDx = 0; 
+        let nextDy = 0; 
+        let highScore = 0;
+
+        // 格式化時間為 MM:SS
+        function formatTime(milliseconds) {
+            const totalSeconds = Math.floor(milliseconds / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        function init() {
+            const savedScore = localStorage.getItem('neon_snake_high_score');
+            if (savedScore) {
+                highScore = parseInt(savedScore, 10);
+                highScoreElement.innerText = highScore;
+            }
+
+            if (window.innerWidth < 450) {
+                canvas.width = 300;
+                canvas.height = 300;
+            }
+        }
+
+        function resetGame() {
+            const startPos = Math.floor(tileCount / 2);
+            snake = new SnakeList();
+            // 建立初始長度為 3 的蛇 (注意加入順序)
+            snake.addHead(startPos, startPos + 2); // 尾巴
+            snake.addHead(startPos, startPos + 1); // 身體
+            snake.addHead(startPos, startPos);     // 頭
+            
+            dx = 0;
+            dy = -1;
+            nextDx = 0;
+            nextDy = -1;
+            
+            // 重置防作弊分數與紀錄
+            _secureScore = 0;
+            _secureActionLog = [];
+            scoreElement.innerText = "0";
+            timeElement.innerText = "00:00";
+            
+            speed = 8; // 初始速度: 每秒 8 格
+            spawnFood();
+            instructionsPanel.classList.add('hidden');
+        }
+
+        function gameLoop(currentTime) {
+            if (!isPlaying) return;
+
+            // 請求下一幀
+            animationFrameId = window.requestAnimationFrame(gameLoop);
+
+            // 處理背景暫停造成的時間跳躍
+            // 如果兩幀之間超過 1 秒 (例如切換分頁)，視為暫停，扣除這段時間
+            const frameDelta = currentTime - lastFrameTime;
+            if (frameDelta > 1000) {
+                totalPausedTime += frameDelta;
+            }
+            lastFrameTime = currentTime;
+
+            // 更新生存時間
+            currentSurvivalTime = currentTime - gameStartTime - totalPausedTime;
+            timeElement.innerText = formatTime(currentSurvivalTime);
+
+            // 計算距離上次邏輯更新經過了多少秒
+            const secondsSinceLastLogicUpdate = (currentTime - lastLogicUpdateTime) / 1000;
+            
+            // 速度控制：不到移動時機就不進行邏輯更新
+            if (secondsSinceLastLogicUpdate < 1 / speed) return;
+
+            lastLogicUpdateTime = currentTime;
+
+            update();
+            draw();
+        }
+
+        function update() {
+            dx = nextDx;
+            dy = nextDy;
+
+            // 紀錄操作軌跡 (Client-Side Trust 解決方案的一環)
+            if (dx !== 0 || dy !== 0) {
+                 _secureActionLog.push({ dir: [dx, dy], t: performance.now() });
+            }
+
+            const headX = snake.head.x + dx;
+            const headY = snake.head.y + dy;
+
+            // 撞牆判定
+            if (headX < 0 || headX >= tileCount || headY < 0 || headY >= tileCount) {
+                gameOver();
+                return;
+            }
+
+            // 撞自己判定 (使用 Linked List 方法)
+            if (snake.checkSelfCollision(headX, headY)) {
+                gameOver();
+                return;
+            }
+
+            // O(1) 在頭部新增節點
+            snake.addHead(headX, headY);
+
+            // 吃食物判定
+            if (headX === food.x && headY === food.y) {
+                updateScore(10);
+                // 每次吃到食物，每秒移動的格數增加，遊戲變難
+                if (speed < 20) speed += 0.5; 
+                spawnFood();
+            } else {
+                // O(1) 移除尾巴，維持蛇的長度
+                snake.removeTail(); 
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = '#222';
+            for(let i=0; i<tileCount; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i*gridSize, 0);
+                ctx.lineTo(i*gridSize, canvas.height);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(0, i*gridSize);
+                ctx.lineTo(canvas.width, i*gridSize);
+                ctx.stroke();
+            }
+
+            ctx.fillStyle = '#ff0055'; 
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#ff0055';
+            ctx.fillRect(food.x * gridSize + 2, food.y * gridSize + 2, gridSize - 4, gridSize - 4);
+            ctx.shadowBlur = 0; 
+
+            // 使用 Linked List 進行遍歷渲染
+            snake.forEach((node, index) => {
+                ctx.fillStyle = index === 0 ? '#fff' : '#00ffcc'; 
+                ctx.shadowBlur = index === 0 ? 10 : 5;
+                ctx.shadowColor = '#00ffcc';
+                ctx.fillRect(node.x * gridSize + 1, node.y * gridSize + 1, gridSize - 2, gridSize - 2);
+            });
+            ctx.shadowBlur = 0;
+        }
+
+        function spawnFood() {
+            let newFood;
+            let valid = false;
+            while (!valid) {
+                newFood = {
+                    x: Math.floor(Math.random() * tileCount),
+                    y: Math.floor(Math.random() * tileCount)
+                };
+                // 確保食物沒有生成在蛇身上 (使用 Linked List 方法)
+                valid = !snake.isOnSnake(newFood.x, newFood.y);
+            }
+            food = newFood;
+        }
+
+        function gameOver() {
+            isPlaying = false;
+            window.cancelAnimationFrame(animationFrameId);
+            
+            const finalScore = getSecureScore();
+            const formattedSurvivalTime = formatTime(currentSurvivalTime);
+            
+            if (finalScore > highScore) {
+                highScore = finalScore;
+                highScoreElement.innerText = highScore;
+                localStorage.setItem('neon_snake_high_score', highScore);
+                menuTitle.innerText = "新最高分！";
+                menuTitle.classList.replace('text-pink-500', 'text-yellow-400');
+            } else {
+                menuTitle.innerText = "遊戲結束";
+                menuTitle.classList.replace('text-yellow-400', 'text-pink-500');
+            }
+            
+            menuSubtitle.innerText = ""; // 清除提示字，改顯示統計區塊
+            
+            // 更新並顯示結算統計
+            finalScoreElement.innerText = finalScore;
+            finalTimeElement.innerText = formattedSurvivalTime;
+            menuStats.classList.remove('hidden');
+
+            startBtn.innerText = "重新開始";
+            menuOverlay.classList.remove('hidden');
+            instructionsPanel.classList.remove('hidden');
+        }
+
+        function startGame() {
+            if (isPlaying) return;
+            menuOverlay.classList.add('hidden');
+            menuStats.classList.add('hidden'); // 隱藏結算區塊
+            resetGame();
+            isPlaying = true;
+            
+            // 初始化時間追蹤
+            const now = window.performance.now();
+            gameStartTime = now;
+            lastFrameTime = now;
+            lastLogicUpdateTime = now;
+            totalPausedTime = 0;
+            
+            animationFrameId = window.requestAnimationFrame(gameLoop);
+        }
+
+        // Keyboard Controls
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !isPlaying) {
+                startGame();
+                return;
+            }
+            
+            if (!isPlaying) return;
+
+            // Prevent reverse gear (and immediate self-death) by using nextDx/nextDy buffer
+            switch (e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    if (dy !== 1) { nextDx = 0; nextDy = -1; }
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    if (dy !== -1) { nextDx = 0; nextDy = 1; }
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    if (dx !== 1) { nextDx = -1; nextDy = 0; }
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    if (dx !== -1) { nextDx = 1; nextDy = 0; }
+                    break;
+            }
+        });
+
+        // UI Button Events
+        startBtn.addEventListener('click', startGame);
+
+        // Mobile On-Screen D-Pad Controls
+        const bindDpad = (id, newDx, newDy, preventDx, preventDy) => {
+            const btn = document.getElementById(id);
+            const trigger = (e) => {
+                e.preventDefault();
+                if (!isPlaying) startGame();
+                else if (dx !== preventDx && dy !== preventDy) {
+                    nextDx = newDx; nextDy = newDy;
+                }
+            };
+            btn.addEventListener('touchstart', trigger);
+            btn.addEventListener('mousedown', trigger);
+        };
+
+        bindDpad('btn-up', 0, -1, 0, 1);
+        bindDpad('btn-down', 0, 1, 0, -1);
+        bindDpad('btn-left', -1, 0, 1, 0);
+        bindDpad('btn-right', 1, 0, -1, 0);
+
+        // Boot
+        init();
+
+    </script>
+</body>
+</html>
